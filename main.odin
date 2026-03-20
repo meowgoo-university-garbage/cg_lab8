@@ -10,6 +10,13 @@ import gl "vendor:OpenGL"
 MAJOR :: 4
 MINOR :: 6
 
+Vertex :: struct {
+    pos : [3]f32,
+    // _ : f32,
+    col : [3]f32,
+    // _ : f32,
+}
+
 main :: proc() {
     if !glfw.Init() {
         fmt.println("bad")
@@ -34,11 +41,44 @@ main :: proc() {
         (cast(^rawptr)p)^ = glfw.GetProcAddress(name)
     })
 
+    program, _ := gl.load_shaders_file("vertex.glsl", "fragment.glsl")
+    defer gl.DeleteProgram(program)
+
+    array_vertex : u32
+    gl.GenVertexArrays(1, &array_vertex)
+    defer gl.DeleteVertexArrays(1, &array_vertex)
+    gl.BindVertexArray(array_vertex)
+
+    vertexes : []Vertex = {
+        { pos = { -0.3, -0.3, 0.0 }, col = { 1.0, 0.0, 0.0 } },
+        { pos = { 0.3, -0.3, 0.0 },  col = { 0.0, 1.0, 0.0 } },
+        { pos = { 0.0, 0.5, 0.0 },   col = { 0.0, 0.0, 1.0 } },
+    }
+
+    buffer_vertex : u32
+    gl.GenBuffers(1, &buffer_vertex)
+    defer gl.DeleteBuffers(1, &buffer_vertex)
+
+    gl.BindBuffer(gl.ARRAY_BUFFER, buffer_vertex)
+    gl.BufferData(gl.ARRAY_BUFFER, size_of(Vertex) * len(vertexes), raw_data(vertexes), gl.STATIC_DRAW)
+
+    gl.EnableVertexAttribArray(0)
+    gl.EnableVertexAttribArray(1)
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, size_of(Vertex), offset_of(Vertex, pos))
+    gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, size_of(Vertex), offset_of(Vertex, col))
+
+
+    gl.Enable(gl.DEPTH_TEST)
     for !glfw.WindowShouldClose(window) {
         glfw.PollEvents()
 
-        gl.ClearColor(0.2, 0.3, 0.4, 1.0)
-        gl.Clear(gl.COLOR_BUFFER_BIT)
+        gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+        // gl.ClearColor(0.2, 0.3, 0.4, 1.0)
+
+        gl.UseProgram(program)
+
+        gl.BindVertexArray(array_vertex)
+        gl.DrawArraysInstanced(gl.TRIANGLES, 0, cast(i32)len(vertexes), 1)
 
         glfw.SwapBuffers(window)
     }
