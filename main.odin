@@ -3,6 +3,8 @@ package main
 import "core:fmt"
 import glfw "vendor:glfw"
 import gl "vendor:OpenGL"
+import "core:time"
+import "core:math/linalg"
 
 // NOTE: some boilerplate copied from here
 // https://github.com/vassvik/odin-gl_examples
@@ -50,9 +52,9 @@ main :: proc() {
     gl.BindVertexArray(array_vertex)
 
     vertexes : []Vertex = {
-        { pos = { -0.3, -0.3, 0.0 }, col = { 1.0, 0.0, 0.0 } },
-        { pos = { 0.3, -0.3, 0.0 },  col = { 0.0, 1.0, 0.0 } },
-        { pos = { 0.0, 0.5, 0.0 },   col = { 0.0, 0.0, 1.0 } },
+        { pos = { -0.5,  0.0,  0.0 },   col = { 1.0, 0.0, 0.0 } },
+        { pos = {  0.5,  0.0,  0.0 },   col = { 0.0, 1.0, 0.0 } },
+        { pos = {  0.5,  0.0,  1.0 },   col = { 0.0, 0.0, 1.0 } },
     }
 
     buffer_vertex : u32
@@ -68,6 +70,12 @@ main :: proc() {
     gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, size_of(Vertex), offset_of(Vertex, col))
 
 
+
+    time_start := time.now()
+
+
+
+
     gl.Enable(gl.DEPTH_TEST)
     for !glfw.WindowShouldClose(window) {
         glfw.PollEvents()
@@ -76,6 +84,19 @@ main :: proc() {
         // gl.ClearColor(0.2, 0.3, 0.4, 1.0)
 
         gl.UseProgram(program)
+
+        time_now := time.now()
+        time_passed := cast(f32)time.duration_seconds(time.diff(time_start, time_now))
+        gl.Uniform1f(0, time_passed)
+
+        matrix_model := linalg.MATRIX4F32_IDENTITY
+        matrix_view  := linalg.matrix4_look_at_f32({ 0.0, -5.0, 0.0 }, { 0.0, 0.0, 0.0 }, { 0.0, 0.0, 1.0 })
+        matrix_proj  := linalg.matrix4_perspective_f32(90, 800.0 / 600.0, 0.1, 100)
+
+        gl.UniformMatrix4fv(1, 1, gl.FALSE, cast(^f32)&matrix_model)
+        gl.UniformMatrix4fv(2, 1, gl.FALSE, cast(^f32)&matrix_view)
+        gl.UniformMatrix4fv(3, 1, gl.FALSE, cast(^f32)&matrix_proj)
+
 
         gl.BindVertexArray(array_vertex)
         gl.DrawArraysInstanced(gl.TRIANGLES, 0, cast(i32)len(vertexes), 1)
