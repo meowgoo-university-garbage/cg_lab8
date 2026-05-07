@@ -10,49 +10,8 @@ import "core:math/rand"
 import myglfw "./glfw"
 import obj "./obj"
 import "core:os"
-
-random_bright :: proc () -> [3]f32 {
-    random_bright_single :: proc () -> f32 {
-        return (rand.float32() / 2) + 0.5
-    }
-    return { random_bright_single(), random_bright_single(), random_bright_single() }
-}
-
-random_dark :: proc () -> [3]f32 {
-    random_dark_single :: proc () -> f32 {
-        return rand.float32() / 2
-    }
-    return { random_dark_single(), random_dark_single(), random_dark_single() }
-}
-
-
-s :: math.SQRT_THREE
-
-VERTEXES : []Vertex : {
-    { pos = { -1, -1, 1 },    col = {  }, nor = { -s, -s, s   } },
-    { pos = { 1, -1, 1 },     col = {  }, nor = { s, -s, s    } },
-    { pos = { 1, 1, 1 },      col = {  }, nor = { s, s, s     } },
-    { pos = { -1, 1, 1 },     col = {  }, nor = { -s, s, s    } },
-    { pos = { -1, -1, -1 },   col = {  }, nor = { -s, -s, -s  } },
-    { pos = { 1, -1, -1 },    col = {  }, nor = { s, -s, -s   } },
-    { pos = { 1, 1, -1 },     col = {  }, nor = { s, s, -s    } },
-    { pos = { -1, 1, -1 },    col = {  }, nor = { -s, s, -s   } },
-}
-
-INDEXES : []u32 : {
-    0, 1, 2,
-    2, 3, 0,
-    0, 4, 5,
-    5, 1, 0,
-    1, 5, 6,
-    6, 2, 1,
-    2, 6, 7,
-    7, 3, 2,
-    3, 7, 4,
-    4, 0, 3,
-    5, 4, 6,
-    6, 7, 4
-}
+import img "core:image"
+import img_png "core:image/png"
 
 
 
@@ -177,7 +136,7 @@ main :: proc() {
 
 
 
-    model_bytes, _ := os.read_entire_file_from_path("monkey.obj", context.allocator)
+    model_bytes, _ := os.read_entire_file_from_path("cube.obj", context.allocator)
     model_mesh, ok := loadObj(model_bytes)
     if !ok {
         fmt.println("BAD model")
@@ -229,27 +188,6 @@ main :: proc() {
 
 
 
-    WindowData :: struct{
-        orthogonal : bool,
-    }
-
-    wdata : WindowData = {
-        orthogonal = false,
-    }
-    glfw.SetWindowUserPointer(window, &wdata)
-
-
-    myglfw.SetKeyCallback(window, proc "c" (window : glfw.WindowHandle, key : myglfw.Key, scancode : myglfw.Scancode, action : myglfw.KeyAction, mods : myglfw.Mods) {
-        wdata := cast(^WindowData)glfw.GetWindowUserPointer(window)
-
-        if action != .Press { return }
-
-        #partial switch key {
-        case .Space:
-            wdata.orthogonal = !wdata.orthogonal
-        case: return
-        }
-    })
 
     gl.Enable(gl.DEPTH_TEST)
 
@@ -268,6 +206,71 @@ main :: proc() {
         rot = linalg.QUATERNIONF32_IDENTITY,
         scale = ({ 1, 1, 1 } * 0.3),
     }
+
+
+
+    WindowData :: struct {
+        texture_ralsei : u32,
+        texture_osaka : u32,
+
+        texture_current : u32,
+    }
+
+
+
+    myglfw.SetMouseButtonCallback(window, proc "c" (window : glfw.WindowHandle, button : myglfw.MouseButton, action : myglfw.Action, mods : myglfw.Mods) {
+        if action != .Press { return }
+
+        wdata := cast(^WindowData)glfw.GetWindowUserPointer(window)
+        if wdata.texture_current == wdata.texture_ralsei {
+            wdata.texture_current = wdata.texture_osaka
+        }
+        else {
+            wdata.texture_current = wdata.texture_ralsei
+        }
+
+        gl.BindTexture(gl.TEXTURE_2D, wdata.texture_current)
+    })
+
+
+
+    texture_ralsei : u32
+    gl.GenTextures(1, &texture_ralsei)
+    gl.BindTexture(gl.TEXTURE_2D, texture_ralsei)
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+
+    image_ralsei, _ := img.load_from_file("ralsei.png", { .alpha_add_if_missing })
+    gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, cast(i32)image_ralsei.width, cast(i32)image_ralsei.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, raw_data(image_ralsei.pixels.buf))
+    gl.GenerateMipmap(gl.TEXTURE_2D)
+
+
+
+
+    texture_osaka : u32
+    gl.GenTextures(1, &texture_osaka)
+    gl.BindTexture(gl.TEXTURE_2D, texture_osaka)
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT)
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+
+    image_osaka, _ := img.load_from_file("osaka.png", { .alpha_add_if_missing })
+    gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, cast(i32)image_osaka.width, cast(i32)image_osaka.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, raw_data(image_osaka.pixels.buf))
+    gl.GenerateMipmap(gl.TEXTURE_2D)
+
+
+
+    wdata : WindowData = {
+        texture_ralsei = texture_ralsei,
+        texture_osaka = texture_osaka,
+
+        texture_current = texture_ralsei,
+    }
+
+    glfw.SetWindowUserPointer(window, &wdata)
 
 
 
