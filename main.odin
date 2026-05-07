@@ -85,7 +85,7 @@ main :: proc() {
     glfw.WindowHint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
     glfw.WindowHint_bool(glfw.RESIZABLE, false)
 
-    window := glfw.CreateWindow(800, 600, "lab1 __FLOAT__", nil, nil)
+    window := glfw.CreateWindow(800, 600, "lab4 __FLOAT__", nil, nil)
     if window == nil {
         fmt.println("bad")
         return
