@@ -8,6 +8,8 @@ import "core:math"
 import "core:math/linalg"
 import "core:math/rand"
 import myglfw "./glfw"
+import obj "./obj"
+import "core:os"
 
 random_bright :: proc () -> [3]f32 {
     random_bright_single :: proc () -> f32 {
@@ -61,7 +63,66 @@ Transform :: struct {
     scale : [3]f32,
 }
 
+Index :: u32
 
+Mesh :: struct {
+    array_index : []u32,
+    array_vertex : []Vertex,
+}
+
+loadObj :: proc (data : []u8) -> (mesh : Mesh, ok : bool = false) {
+    vertexMap := make(map[Vertex]Index)
+
+    vertexes := make([dynamic]Vertex)
+    indexes := make([dynamic]Index)
+
+    vpos, vtex, vnor, faces := obj.parse_obj(string(data)) or_return
+
+    // NOTE: check allocator
+    defer {
+        delete(vpos)
+        delete(vtex)
+        delete(vnor)
+        delete(faces)
+    }
+
+    for face in faces {
+        for vertex in face {
+            pos := vpos[vertex.x - 1]
+            tex := vtex[vertex.y - 1]
+            nor := vnor[vertex.z - 1]
+            tex.y = 1.0 - tex.y
+
+            v := Vertex{
+                pos = pos,
+                col = { 1.0, 1.0, 1.0 },
+                tex = tex,
+                nor = nor,
+            }
+
+            i := Index(len(vertexes))
+
+            newIndex, exists := vertexMap[v]
+
+            if !exists {
+                vertexMap[v] = i
+                append(&vertexes, v)
+                append(&indexes, i)
+            }
+            else {
+                append(&indexes, newIndex)
+            }
+        }
+    }
+
+    mesh = {
+        array_vertex = vertexes[:],
+        array_index = indexes[:],
+    }
+
+    ok = true
+    return
+}
 
 
 MAJOR :: 4
@@ -71,6 +132,7 @@ Vertex :: struct {
     pos : [3]f32,
     col : [3]f32,
     nor : [3]f32,
+    tex : [2]f32,
 }
 
 main :: proc() {
@@ -113,15 +175,26 @@ main :: proc() {
 
 
 
+
+
+    model_bytes, _ := os.read_entire_file_from_path("monkey.obj", context.allocator)
+    model_mesh, ok := loadObj(model_bytes)
+    if !ok {
+        fmt.println("BAD model")
+    }
+
+
+
+
     vertexes : [dynamic]Vertex
-    for v in VERTEXES {
+    for v in model_mesh.array_vertex {
         v := v
         v.col = random_bright()
         append(&vertexes, v)
     }
 
     indexes : []u32
-    indexes = INDEXES
+    indexes = model_mesh.array_index
 
     buffer_vertex : u32
     gl.GenBuffers(1, &buffer_vertex)
@@ -192,12 +265,6 @@ main :: proc() {
         scale = ({ 1, 1, 1 } * 0.3),
     }
 
-    transform_lid : Transform = {
-        pos = { 0, 0, 1 + 0.1 },
-        rot = linalg.quaternion_from_euler_angles_f32(1, 0, 0, .XYZ),
-        scale = { 1, 1, 0.1 },
-    }
-
 
 
     for !glfw.WindowShouldClose(window) {
@@ -259,13 +326,6 @@ main :: proc() {
 
 
         {
-            lid, _, _ := linalg.euler_angles_from_quaternion_f32(transform_lid.rot, .XYZ)
-            lid +=  1 * myglfw.IsKeyPressed_f32(window, .LetterK) * time_delta
-            lid += -1 * myglfw.IsKeyPressed_f32(window, .LetterJ) * time_delta
-            transform_lid.rot = linalg.quaternion_from_euler_angles_f32(lid, 0, 0, .XYZ)
-        }
-
-        {
             transform_box.rot = linalg.quaternion_angle_axis_f32(-1 * time_delta * myglfw.IsKeyPressed_f32(window, .LetterH), { 1, 1, 1 }) * transform_box.rot
             transform_box.rot = linalg.quaternion_angle_axis_f32( 1 * time_delta * myglfw.IsKeyPressed_f32(window, .LetterL), { 1, 1, 1 }) * transform_box.rot
         }
@@ -283,24 +343,6 @@ main :: proc() {
             gl.UseProgram(program_box)
 
             matrix_model := linalg.matrix4_translate_f32(transform_box.pos) * linalg.matrix4_from_quaternion_f32(transform_box.rot) * linalg.matrix4_scale_f32(transform_box.scale)
-
-            gl.UniformMatrix4fv(1, 1, gl.FALSE, cast(^f32)&matrix_model)
-            gl.UniformMatrix4fv(2, 1, gl.FALSE, cast(^f32)&matrix_view)
-            gl.UniformMatrix4fv(3, 1, gl.FALSE, cast(^f32)&matrix_proj)
-
-            gl.BindVertexArray(array_vertex)
-            gl.DrawElements(gl.TRIANGLES, cast(i32)len(indexes), gl.UNSIGNED_INT, nil)
-        }
-
-
-        // LID
-        {
-            gl.UseProgram(program_lid)
-
-            matrix_model_parent := linalg.matrix4_translate_f32(transform_box.pos) * linalg.matrix4_from_quaternion_f32(transform_box.rot) * linalg.matrix4_scale_f32(transform_box.scale)
-            matrix_rotation := linalg.matrix4_translate_f32({ 0, -1, 0 }) * linalg.matrix4_from_quaternion_f32(transform_lid.rot) * linalg.matrix4_translate_f32({ 0, 1, 0 })
-            matrix_model := linalg.matrix4_translate_f32(transform_lid.pos) * matrix_rotation * linalg.matrix4_scale_f32(transform_lid.scale)
-            matrix_model = matrix_model_parent * matrix_model
 
             gl.UniformMatrix4fv(1, 1, gl.FALSE, cast(^f32)&matrix_model)
             gl.UniformMatrix4fv(2, 1, gl.FALSE, cast(^f32)&matrix_view)
