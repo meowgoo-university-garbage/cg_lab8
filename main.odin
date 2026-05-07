@@ -23,99 +23,46 @@ random_dark :: proc () -> [3]f32 {
     return { random_dark_single(), random_dark_single(), random_dark_single() }
 }
 
-// NOTE: some boilerplate copied from here
-// https://github.com/vassvik/odin-gl_examples
 
-// NOTE: dodecahedron vertexes and model
-// https://en.wikipedia.org/wiki/Regular_dodecahedron#Relation_to_the_golden_ratio
+s :: math.SQRT_THREE
 
-PHI :: 1.618
-
-DODECAHEDRON : [][3]f32 : {
-    // ORANGE
-    { 1, 1, 1 },                // 0
-    { 1, 1, -1 },               // 1
-    { 1, -1, 1 },               // 2
-    { 1, -1, -1 },              // 3
-    { -1, 1, 1 },               // 4
-    { -1, 1, -1 },              // 5
-    { -1, -1, 1 },              // 6
-    { -1, -1, -1 },             // 7
-
-
-    // GREEN
-    { 0, PHI, 1 / PHI },        // 8
-    { 0, PHI, -1 / PHI },       // 9
-
-    { 0, -PHI, 1 / PHI },       // 10
-    { 0, -PHI, -1 / PHI },      // 11
-
-
-    // BLUE
-    { 1 / PHI, 0, PHI },        // 12
-    { -1 / PHI, 0, PHI },       // 13
-
-    { 1 / PHI, 0, -PHI },       // 14
-    { -1 / PHI, 0, -PHI },      // 15
-
-
-    // PINK
-    { PHI, 1 / PHI, 0 },        // 16
-    { PHI, -1 / PHI, 0 },       // 17
-
-    { -PHI, 1 / PHI, 0 },       // 18
-    { -PHI, -1 / PHI, 0 },      // 19
+VERTEXES : []Vertex : {
+    { pos = { -1, -1, 1 },    col = {  }, nor = { -s, -s, s   } },
+    { pos = { 1, -1, 1 },     col = {  }, nor = { s, -s, s    } },
+    { pos = { 1, 1, 1 },      col = {  }, nor = { s, s, s     } },
+    { pos = { -1, 1, 1 },     col = {  }, nor = { -s, s, s    } },
+    { pos = { -1, -1, -1 },   col = {  }, nor = { -s, -s, -s  } },
+    { pos = { 1, -1, -1 },    col = {  }, nor = { s, -s, -s   } },
+    { pos = { 1, 1, -1 },     col = {  }, nor = { s, s, -s    } },
+    { pos = { -1, 1, -1 },    col = {  }, nor = { -s, s, -s   } },
 }
 
-DODECAHEDRON_INDEXES : []u32 : {
-    6, 10, 13,
-    10, 12, 13,
-    10, 2, 12,
-
-    19, 7, 6,
-    6, 7, 10,
-    10, 7, 11,
-
-    10, 11, 3,
-    3, 2, 10,
-    3, 17, 2,
-    
-    12, 2, 17,
-    17, 0, 12,
-    17, 16, 0,
-
-    17, 3, 14,
-    14, 16, 17,
-    14, 1, 16,
-
-    11, 7, 15,
-    11, 15, 3,
-    15, 14, 3,
-
-    4, 6, 13,
-    4, 18, 6,
-    18, 19, 6,
-
-    7, 19, 18,
-    7, 18, 5,
-    7, 5, 15,
-
-    4, 5, 18,
-    4, 8, 5,
-    8, 9, 5,
-
-    13, 12, 4,
-    12, 8, 4,
-    12, 0, 8,
-
-    5, 14, 15,
-    5, 9, 14,
-    9, 1, 14,
-
-    0, 9, 8,
-    0, 16, 9,
-    16, 1, 9
+INDEXES : []u32 : {
+    0, 1, 2,
+    2, 3, 0,
+    0, 4, 5,
+    5, 1, 0,
+    1, 5, 6,
+    6, 2, 1,
+    2, 6, 7,
+    7, 3, 2,
+    3, 7, 4,
+    4, 0, 3,
+    5, 4, 6,
+    6, 7, 4
 }
+
+
+
+
+Transform :: struct {
+    pos : [3]f32,
+    rot : quaternion128,
+    scale : [3]f32,
+}
+
+
+
 
 MAJOR :: 4
 MINOR :: 6
@@ -123,6 +70,7 @@ MINOR :: 6
 Vertex :: struct {
     pos : [3]f32,
     col : [3]f32,
+    nor : [3]f32,
 }
 
 main :: proc() {
@@ -143,6 +91,8 @@ main :: proc() {
         return
     }
 
+    myglfw.SetCursorInputMode(window, .Disabled)
+
     glfw.MakeContextCurrent(window)
     glfw.SwapInterval(1)
 
@@ -150,8 +100,11 @@ main :: proc() {
         (cast(^rawptr)p)^ = glfw.GetProcAddress(name)
     })
 
-    program, _ := gl.load_shaders_file("vertex.glsl", "fragment.glsl")
-    defer gl.DeleteProgram(program)
+    program_box, _ := gl.load_shaders_file("vertex.glsl", "fragment.glsl")
+    defer gl.DeleteProgram(program_box)
+
+    program_lid, _ := gl.load_shaders_file("vertex-lid.glsl", "fragment-lid.glsl")
+    defer gl.DeleteProgram(program_lid)
 
     array_vertex : u32
     gl.GenVertexArrays(1, &array_vertex)
@@ -161,13 +114,14 @@ main :: proc() {
 
 
     vertexes : [dynamic]Vertex
-    for pos in DODECAHEDRON {
-        col := random_bright()
-        append(&vertexes, Vertex{ pos = pos, col = col })
+    for v in VERTEXES {
+        v := v
+        v.col = random_bright()
+        append(&vertexes, v)
     }
 
     indexes : []u32
-    indexes = DODECAHEDRON_INDEXES
+    indexes = INDEXES
 
     buffer_vertex : u32
     gl.GenBuffers(1, &buffer_vertex)
@@ -227,6 +181,24 @@ main :: proc() {
     rotation : f32
     scale : f32 = 0.3
 
+    cursor_old : [2]f32
+
+
+    transform_player : Transform
+
+    transform_box : Transform = {
+        pos = { 0, 0, 0 },
+        rot = linalg.QUATERNIONF32_IDENTITY,
+        scale = ({ 1, 1, 1 } * 0.3),
+    }
+
+    transform_lid : Transform = {
+        pos = { 0, 0, 1 + 0.1 },
+        rot = linalg.quaternion_from_euler_angles_f32(1, 0, 0, .XYZ),
+        scale = { 1, 1, 0.1 },
+    }
+
+
 
     for !glfw.WindowShouldClose(window) {
         glfw.PollEvents()
@@ -234,7 +206,6 @@ main :: proc() {
 
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-        gl.UseProgram(program)
 
         time_now := time.now()
         time_passed := cast(f32)time.duration_seconds(time.diff(time_start, time_now))
@@ -244,32 +215,100 @@ main :: proc() {
 
 
 
-        position += { 0, 0, 1 } * myglfw.IsKeyPressed_f32(window, .Up) * time_delta
-        position += { 0, 0, -1} * myglfw.IsKeyPressed_f32(window, .Down) * time_delta
-
-        position += { 0, 1, 0 } * myglfw.IsKeyPressed_f32(window, .LetterJ) * time_delta
-        position += { 0, -1, 0} * myglfw.IsKeyPressed_f32(window, .LetterK) * time_delta
-
-        scale += myglfw.IsKeyPressed_f32(window, .LetterL) * time_delta
-        scale += myglfw.IsKeyPressed_f32(window, .LetterH) * time_delta * -1
-
-        rotation += myglfw.IsKeyPressed_f32(window, .Right) * time_delta
-        rotation += myglfw.IsKeyPressed_f32(window, .Left) * time_delta * -1
 
 
+        cursor_pos := myglfw.GetCursorPosf32(window)
+        defer cursor_old = cursor_pos
+        cursor_delta := cursor_pos - cursor_old
 
-        matrix_model := linalg.matrix4_translate_f32(position) * linalg.matrix4_rotate_f32(rotation, { 1.0, 1.0, 1.0 }) * linalg.matrix4_scale_f32({ scale, scale, scale })
-        matrix_view  := linalg.matrix4_look_at_f32({ 0.0, -2.5, 0.0 }, { 0.0, 0.0, 0.0 }, { 0.0, 0.0, 1.0 })
+        yaw, pitch, _ := linalg.euler_angles_from_quaternion_f32(transform_player.rot, .ZXY)
 
-        matrix_proj := !wdata.orthogonal ? linalg.matrix4_perspective_f32(0.25 * math.PI, 800.0 / 600.0, 0.1, 100) : linalg.matrix_ortho3d_f32(-1, 1, -1, 1, 0.1, 100)
+        sensitivity :: 0.3
+        pitch_safety :: 0.1
 
-        gl.UniformMatrix4fv(1, 1, gl.FALSE, cast(^f32)&matrix_model)
-        gl.UniformMatrix4fv(2, 1, gl.FALSE, cast(^f32)&matrix_view)
-        gl.UniformMatrix4fv(3, 1, gl.FALSE, cast(^f32)&matrix_proj)
+        yaw   -= cursor_delta.x * time_delta * sensitivity
+        pitch -= cursor_delta.y * time_delta * sensitivity
+        if pitch <= -math.PI / 2 + pitch_safety { pitch = -math.PI / 2 + pitch_safety }
+        if pitch >= math.PI / 2 - pitch_safety  { pitch = math.PI / 2 - pitch_safety }
 
-        gl.BindVertexArray(array_vertex)
-        // gl.DrawArraysInstanced(gl.TRIANGLES, 0, cast(i32)len(vertexes), 1)
-        gl.DrawElements(gl.TRIANGLES, cast(i32)len(indexes), gl.UNSIGNED_INT, nil)
+        transform_player.rot = linalg.quaternion_from_euler_angles_f32(yaw, pitch, 0, .ZXY)
+
+
+
+
+
+        playerMovement : [3]f32 =
+            {  0,  1,  0 } * myglfw.IsKeyPressed_f32(window, .LetterW) +
+            {  0, -1,  0 } * myglfw.IsKeyPressed_f32(window, .LetterS) +
+            {  1,  0,  0 } * myglfw.IsKeyPressed_f32(window, .LetterD) +
+            { -1,  0,  0 } * myglfw.IsKeyPressed_f32(window, .LetterA) +
+            {  0,  0,  1 } * myglfw.IsKeyPressed_f32(window, .Space) +
+            {  0,  0, -1 } * myglfw.IsKeyPressed_f32(window, .LeftShift)
+        playerMovement = linalg.normalize0(playerMovement)
+
+
+        movementRotation := linalg.matrix4_rotate_f32(yaw, { 0, 0, 1 })
+
+
+        playerMovement = (movementRotation * [4]f32{ playerMovement.x, playerMovement.y, playerMovement.z, 0 }).xyz
+        playerMovement = linalg.normalize0(playerMovement) * time_delta
+        transform_player.pos += playerMovement
+
+
+
+
+
+        {
+            lid, _, _ := linalg.euler_angles_from_quaternion_f32(transform_lid.rot, .XYZ)
+            lid +=  1 * myglfw.IsKeyPressed_f32(window, .LetterK) * time_delta
+            lid += -1 * myglfw.IsKeyPressed_f32(window, .LetterJ) * time_delta
+            transform_lid.rot = linalg.quaternion_from_euler_angles_f32(lid, 0, 0, .XYZ)
+        }
+
+        {
+            transform_box.rot = linalg.quaternion_angle_axis_f32(-1 * time_delta * myglfw.IsKeyPressed_f32(window, .LetterH), { 1, 1, 1 }) * transform_box.rot
+            transform_box.rot = linalg.quaternion_angle_axis_f32( 1 * time_delta * myglfw.IsKeyPressed_f32(window, .LetterL), { 1, 1, 1 }) * transform_box.rot
+        }
+
+
+        viewDirection := (linalg.matrix4_from_quaternion_f32(transform_player.rot) * [4]f32{ 0.0, 1.0, 0.0, 0.0 }).xyz
+        matrix_view  := linalg.matrix4_look_at_f32(transform_player.pos, transform_player.pos + viewDirection, { 0.0, 0.0, 1.0 })
+
+        matrix_proj := linalg.matrix4_perspective_f32(0.25 * math.PI, 800.0 / 600.0, 0.1, 100)
+
+
+
+        // BOX
+        {
+            gl.UseProgram(program_box)
+
+            matrix_model := linalg.matrix4_translate_f32(transform_box.pos) * linalg.matrix4_from_quaternion_f32(transform_box.rot) * linalg.matrix4_scale_f32(transform_box.scale)
+
+            gl.UniformMatrix4fv(1, 1, gl.FALSE, cast(^f32)&matrix_model)
+            gl.UniformMatrix4fv(2, 1, gl.FALSE, cast(^f32)&matrix_view)
+            gl.UniformMatrix4fv(3, 1, gl.FALSE, cast(^f32)&matrix_proj)
+
+            gl.BindVertexArray(array_vertex)
+            gl.DrawElements(gl.TRIANGLES, cast(i32)len(indexes), gl.UNSIGNED_INT, nil)
+        }
+
+
+        // LID
+        {
+            gl.UseProgram(program_lid)
+
+            matrix_model_parent := linalg.matrix4_translate_f32(transform_box.pos) * linalg.matrix4_from_quaternion_f32(transform_box.rot) * linalg.matrix4_scale_f32(transform_box.scale)
+            matrix_rotation := linalg.matrix4_translate_f32({ 0, -1, 0 }) * linalg.matrix4_from_quaternion_f32(transform_lid.rot) * linalg.matrix4_translate_f32({ 0, 1, 0 })
+            matrix_model := linalg.matrix4_translate_f32(transform_lid.pos) * matrix_rotation * linalg.matrix4_scale_f32(transform_lid.scale)
+            matrix_model = matrix_model_parent * matrix_model
+
+            gl.UniformMatrix4fv(1, 1, gl.FALSE, cast(^f32)&matrix_model)
+            gl.UniformMatrix4fv(2, 1, gl.FALSE, cast(^f32)&matrix_view)
+            gl.UniformMatrix4fv(3, 1, gl.FALSE, cast(^f32)&matrix_proj)
+
+            gl.BindVertexArray(array_vertex)
+            gl.DrawElements(gl.TRIANGLES, cast(i32)len(indexes), gl.UNSIGNED_INT, nil)
+        }
 
         glfw.SwapBuffers(window)
     }
