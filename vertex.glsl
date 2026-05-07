@@ -24,6 +24,6 @@ void main() {
     fragColor = inColor;
     fragTexCoord = inTexCoord;
     fragPos = inPosition;
-    fragNormal = inNormal;
+    fragNormal = normalize(inNormal);
     fragCamera = camera;
 }
