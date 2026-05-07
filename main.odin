@@ -189,7 +189,7 @@ main :: proc() {
     vertexes : [dynamic]Vertex
     for v in model_mesh.array_vertex {
         v := v
-        v.col = random_bright()
+        // v.col = random_bright()
         append(&vertexes, v)
     }
 
@@ -215,8 +215,12 @@ main :: proc() {
 
     gl.EnableVertexAttribArray(0)
     gl.EnableVertexAttribArray(1)
+    gl.EnableVertexAttribArray(2)
+    gl.EnableVertexAttribArray(3)
     gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, size_of(Vertex), offset_of(Vertex, pos))
     gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, size_of(Vertex), offset_of(Vertex, col))
+    gl.VertexAttribPointer(2, 3, gl.FLOAT, gl.FALSE, size_of(Vertex), offset_of(Vertex, nor))
+    gl.VertexAttribPointer(3, 2, gl.FLOAT, gl.FALSE, size_of(Vertex), offset_of(Vertex, tex))
 
 
 
@@ -347,6 +351,7 @@ main :: proc() {
             gl.UniformMatrix4fv(1, 1, gl.FALSE, cast(^f32)&matrix_model)
             gl.UniformMatrix4fv(2, 1, gl.FALSE, cast(^f32)&matrix_view)
             gl.UniformMatrix4fv(3, 1, gl.FALSE, cast(^f32)&matrix_proj)
+            gl.Uniform3f(4, transform_player.pos.x, transform_player.pos.y, transform_player.pos.z)
 
             gl.BindVertexArray(array_vertex)
             gl.DrawElements(gl.TRIANGLES, cast(i32)len(indexes), gl.UNSIGNED_INT, nil)
