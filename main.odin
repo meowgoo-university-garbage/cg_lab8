@@ -124,8 +124,8 @@ main :: proc() {
     program_box, _ := gl.load_shaders_file("vertex.glsl", "fragment.glsl")
     defer gl.DeleteProgram(program_box)
 
-    program_lid, _ := gl.load_shaders_file("vertex-lid.glsl", "fragment-lid.glsl")
-    defer gl.DeleteProgram(program_lid)
+    program_depth, _ := gl.load_shaders_file("vertex-depth.glsl", "fragment-depth.glsl")
+    defer gl.DeleteProgram(program_depth)
 
     array_vertex : u32
     gl.GenVertexArrays(1, &array_vertex)
@@ -190,6 +190,7 @@ main :: proc() {
 
 
     gl.Enable(gl.DEPTH_TEST)
+    gl.DepthFunc(gl.LESS)
 
 
     position : [3]f32 = { 0, 0, 0 }
@@ -201,10 +202,35 @@ main :: proc() {
 
     transform_player : Transform
 
-    transform_box : Transform = {
+    transform_surface : Transform = {
         pos = { 0, 0, 0 },
         rot = linalg.QUATERNIONF32_IDENTITY,
-        scale = ({ 1, 1, 1 } * 0.3),
+        scale = ({ 15, 15, -0.5 }),
+    }
+
+    transform_box1 : Transform = {
+        pos = ({ 0, 0, (0 + 0.5 + 0.25) } + { 1, 0.5, 0 }),
+        rot = linalg.QUATERNIONF32_IDENTITY,
+        scale = { 1, 1, 1 },
+    }
+
+    transform_box2 : Transform = {
+        pos = ({ 0, 0, (0 + 0.5 + 0.25) } + { -0.5, 1.5, 0 }),
+        rot = linalg.QUATERNIONF32_IDENTITY,
+        scale = { 1, 1, 1 },
+    }
+
+    transforms : []Transform = {
+        transform_surface,
+        transform_box1,
+        transform_box2,
+    }
+
+
+    transform_light : Transform = {
+        pos = { 0, -10, 2 },
+        rot = linalg.quaternion_from_euler_angles_f32(10, 0, 0, .XYZ),
+        scale = {},
     }
 
 
@@ -218,19 +244,43 @@ main :: proc() {
 
 
 
-    myglfw.SetMouseButtonCallback(window, proc "c" (window : glfw.WindowHandle, button : myglfw.MouseButton, action : myglfw.Action, mods : myglfw.Mods) {
-        if action != .Press { return }
+    // myglfw.SetMouseButtonCallback(window, proc "c" (window : glfw.WindowHandle, button : myglfw.MouseButton, action : myglfw.Action, mods : myglfw.Mods) {
+    //     if action != .Press { return }
+    //
+    //     wdata := cast(^WindowData)glfw.GetWindowUserPointer(window)
+    //     if wdata.texture_current == wdata.texture_ralsei {
+    //         wdata.texture_current = wdata.texture_osaka
+    //     }
+    //     else {
+    //         wdata.texture_current = wdata.texture_ralsei
+    //     }
+    //
+    //     gl.BindTexture(gl.TEXTURE_2D, wdata.texture_current)
+    // })
 
-        wdata := cast(^WindowData)glfw.GetWindowUserPointer(window)
-        if wdata.texture_current == wdata.texture_ralsei {
-            wdata.texture_current = wdata.texture_osaka
-        }
-        else {
-            wdata.texture_current = wdata.texture_ralsei
-        }
 
-        gl.BindTexture(gl.TEXTURE_2D, wdata.texture_current)
-    })
+
+    depth_buffer : u32
+    gl.GenFramebuffers(1, &depth_buffer)
+
+    depth_texture : u32
+    gl.GenTextures(1, &depth_texture)
+
+    gl.BindTexture(gl.TEXTURE_2D, depth_texture)
+
+    gl.TexImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT, 4096, 4096, 0, gl.DEPTH_COMPONENT, gl.FLOAT, nil)
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_BORDER)
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_BORDER)
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+    depth_texture_border : [4]f32 = { 1, 1, 1, 1 }
+    gl.TexParameterfv(gl.TEXTURE_2D, gl.TEXTURE_BORDER_COLOR, &depth_texture_border[0])
+
+    gl.BindFramebuffer(gl.FRAMEBUFFER, depth_buffer)
+    gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depth_texture, 0)
+    gl.DrawBuffer(gl.NONE)
+    gl.ReadBuffer(gl.NONE)
+    gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 
 
 
@@ -277,8 +327,6 @@ main :: proc() {
     for !glfw.WindowShouldClose(window) {
         glfw.PollEvents()
 
-
-        gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 
         time_now := time.now()
@@ -330,12 +378,10 @@ main :: proc() {
 
 
 
+        transform_light.rot = linalg.quaternion_angle_axis_f32(-1 * time_delta * myglfw.IsKeyPressed_f32(window, .LetterH), { 0, 0, 1 }) * transform_light.rot
+        transform_light.rot = linalg.quaternion_angle_axis_f32( 1 * time_delta * myglfw.IsKeyPressed_f32(window, .LetterL), { 0, 0, 1 }) * transform_light.rot
 
 
-        {
-            transform_box.rot = linalg.quaternion_angle_axis_f32(-1 * time_delta * myglfw.IsKeyPressed_f32(window, .LetterH), { 1, 1, 1 }) * transform_box.rot
-            transform_box.rot = linalg.quaternion_angle_axis_f32( 1 * time_delta * myglfw.IsKeyPressed_f32(window, .LetterL), { 1, 1, 1 }) * transform_box.rot
-        }
 
 
         viewDirection := (linalg.matrix4_from_quaternion_f32(transform_player.rot) * [4]f32{ 0.0, 1.0, 0.0, 0.0 }).xyz
@@ -344,21 +390,70 @@ main :: proc() {
         matrix_proj := linalg.matrix4_perspective_f32(0.25 * math.PI, 800.0 / 600.0, 0.1, 100)
 
 
+        light_viewDirection := (linalg.matrix4_from_quaternion_f32(transform_light.rot) * [4]f32{ 0.0, 1.0, 0.0, 0.0 }).xyz
+        light_matrix_view := linalg.matrix4_look_at_f32(transform_light.pos, transform_light.pos + light_viewDirection, { 0, 0, 1 })
 
-        // BOX
-        {
-            gl.UseProgram(program_box)
+        light_matrix_proj := linalg.matrix_ortho3d_f32(-20, 20, -20, 20, 0.1, 100)
 
-            matrix_model := linalg.matrix4_translate_f32(transform_box.pos) * linalg.matrix4_from_quaternion_f32(transform_box.rot) * linalg.matrix4_scale_f32(transform_box.scale)
 
-            gl.UniformMatrix4fv(1, 1, gl.FALSE, cast(^f32)&matrix_model)
-            gl.UniformMatrix4fv(2, 1, gl.FALSE, cast(^f32)&matrix_view)
-            gl.UniformMatrix4fv(3, 1, gl.FALSE, cast(^f32)&matrix_proj)
-            gl.Uniform3f(4, transform_player.pos.x, transform_player.pos.y, transform_player.pos.z)
+
+        gl.Viewport(0, 0, 4096, 4096)
+        gl.BindFramebuffer(gl.FRAMEBUFFER, depth_buffer)
+        gl.Clear(gl.DEPTH_BUFFER_BIT)
+
+        gl.UseProgram(program_depth)
+
+        for transform, i in transforms {
+            matrix_model := linalg.matrix4_translate_f32(transform.pos) * linalg.matrix4_from_quaternion_f32(transform.rot) * linalg.matrix4_scale_f32(transform.scale)
+
+            gl.UniformMatrix4fv(0, 1, gl.FALSE, cast(^f32)&matrix_model)
+            gl.UniformMatrix4fv(1, 1, gl.FALSE, cast(^f32)&light_matrix_view)
+            gl.UniformMatrix4fv(2, 1, gl.FALSE, cast(^f32)&light_matrix_proj)
 
             gl.BindVertexArray(array_vertex)
             gl.DrawElements(gl.TRIANGLES, cast(i32)len(indexes), gl.UNSIGNED_INT, nil)
         }
+
+        gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+
+
+
+
+
+
+        gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+        gl.Viewport(0, 0, 800, 600)
+
+        gl.UseProgram(program_box)
+
+        gl.ActiveTexture(gl.TEXTURE1)
+        gl.BindTexture(gl.TEXTURE_2D, depth_texture)
+        gl.Uniform1i(11, 1);
+
+        for transform, i in transforms {
+            gl.ActiveTexture(gl.TEXTURE0)
+            gl.BindTexture(gl.TEXTURE_2D, texture_osaka)
+            gl.Uniform1i(10, 0);
+
+            matrix_model := linalg.matrix4_translate_f32(transform.pos) * linalg.matrix4_from_quaternion_f32(transform.rot) * linalg.matrix4_scale_f32(transform.scale)
+
+            gl.UniformMatrix4fv(1, 1, gl.FALSE, cast(^f32)&matrix_model)
+            gl.UniformMatrix4fv(2, 1, gl.FALSE, cast(^f32)&matrix_view)
+            gl.UniformMatrix4fv(3, 1, gl.FALSE, cast(^f32)&matrix_proj)
+            gl.UniformMatrix4fv(4, 1, gl.FALSE, cast(^f32)&light_matrix_view)
+            gl.UniformMatrix4fv(5, 1, gl.FALSE, cast(^f32)&light_matrix_proj)
+            // gl.Uniform3f(4, transform_player.pos.x, transform_player.pos.y, transform_player.pos.z)
+            // gl.Uniform3f(4, 0, 0, 0)
+
+            gl.BindVertexArray(array_vertex)
+            gl.DrawElements(gl.TRIANGLES, cast(i32)len(indexes), gl.UNSIGNED_INT, nil)
+        }
+
+
+
+
+
 
         glfw.SwapBuffers(window)
     }
